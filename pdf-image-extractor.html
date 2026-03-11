@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF Image Extractor</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-soft: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #22c55e;
+      --accent-2: #16a34a;
+      --danger: #ef4444;
+      --border: #334155;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(1200px 700px at 20% -20%, #1e293b 0%, var(--bg) 40%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(1.4rem, 2.5vw, 2rem);
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    button,
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--panel-soft);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: 0.2s ease;
+      font-size: 0.95rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    button:hover,
+    .btn:hover {
+      background: #273549;
+      border-color: #475569;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent-2);
+      color: #052e16;
+      font-weight: 700;
+    }
+
+    button.primary:hover {
+      background: #4ade80;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 28px;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.45);
+      transition: 0.2s ease;
+      margin-bottom: 16px;
+    }
+
+    .dropzone.dragging {
+      border-color: var(--accent);
+      background: rgba(34, 197, 94, 0.1);
+    }
+
+    .dropzone p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .status {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .progress-wrap {
+      height: 12px;
+      width: 100%;
+      background: #0b1220;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #22c55e, #86efac);
+      transition: width 0.2s ease;
+    }
+
+    .note, .error {
+      border: 1px solid var(--border);
+      border-left: 4px solid #60a5fa;
+      background: rgba(30, 41, 59, 0.7);
+      color: #dbeafe;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
+    }
+
+    .error {
+      border-left-color: var(--danger);
+      color: #fecaca;
+    }
+
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0 12px;
+      flex-wrap: wrap;
+    }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 260px;
+    }
+
+    .thumb {
+      height: 170px;
+      background: #0b1220;
+      display: grid;
+      place-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .thumb img {
+      max-width: 100%;
+      max-height: 170px;
+      object-fit: contain;
+    }
+
+    .meta {
+      padding: 10px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      display: grid;
+      gap: 4px;
+    }
+
+    .meta strong { color: var(--text); }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #0b1220;
+      margin-right: 5px;
+    }
+
+    .badge.warn {
+      border-color: #ca8a04;
+      color: #fef08a;
+      background: rgba(202, 138, 4, 0.15);
+    }
+
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 14px;
+    }
+
+    input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>PDF Image Extractor</h1>
+    <p class="subtitle">Extract true embedded raster images from a PDF in-browser (no server). This tool reads PDF image objects directly and avoids page screenshots/cropping.</p>
+
+    <div class="note">
+      <strong>Note:</strong> Vector artwork (paths/text/shapes) is different from embedded raster images. Vector content may not be extractable as standalone image files.
+    </div>
+
+    <div class="toolbar">
+      <label for="fileInput" class="btn">Choose PDF</label>
+      <input id="fileInput" type="file" accept="application/pdf" />
+      <button id="downloadAllBtn" disabled>Download All (ZIP)</button>
+      <span id="fileInfo" style="color:var(--muted);"></span>
+    </div>
+
+    <div id="dropzone" class="dropzone">
+      <p>Drag & drop a PDF file here, or use <strong>Choose PDF</strong>.</p>
+    </div>
+
+    <div class="status">
+      <div id="statusText" style="color:var(--muted);">Idle.</div>
+      <div class="progress-wrap"><div id="progressBar" class="progress-bar"></div></div>
+    </div>
+
+    <div id="errorBox" class="error" style="display:none;"></div>
+
+    <div class="results-header">
+      <div id="resultsSummary" style="color:var(--muted);">No results yet.</div>
+    </div>
+
+    <div id="resultsGrid" class="results-grid"></div>
+    <div id="emptyState" class="empty">Upload a PDF to begin extraction.</div>
+  </div>
+
+  <!-- pdf.js -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs" type="module"></script>
+  <script type="module">
+    import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs';
+    import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';
+
+    const fileInput = document.getElementById('fileInput');
+    const dropzone = document.getElementById('dropzone');
+    const progressBar = document.getElementById('progressBar');
+    const statusText = document.getElementById('statusText');
+    const resultsGrid = document.getElementById('resultsGrid');
+    const resultsSummary = document.getElementById('resultsSummary');
+    const emptyState = document.getElementById('emptyState');
+    const downloadAllBtn = document.getElementById('downloadAllBtn');
+    const errorBox = document.getElementById('errorBox');
+    const fileInfo = document.getElementById('fileInfo');
+
+    let extractedImages = [];
+    let currentPdfNameBase = 'document';
+
+    function setProgress(value, text) {
+      progressBar.style.width = `${Math.max(0, Math.min(100, value))}%`;
+      statusText.textContent = text;
+    }
+
+    function showError(message) {
+      errorBox.style.display = 'block';
+      errorBox.textContent = message;
+    }
+
+    function clearError() {
+      errorBox.style.display = 'none';
+      errorBox.textContent = '';
+    }
+
+    function bytesToSize(bytes) {
+      if (!Number.isFinite(bytes)) return 'Unknown';
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 ** 2)).toFixed(2)} MB`;
+    }
+
+    async function sha256Hex(arrayBuffer) {
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      return [...new Uint8Array(hashBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function sanitizeFileBase(name) {
+      return (name || 'document').replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9-_]+/g, '_');
+    }
+
+    function extFromMime(mime) {
+      const map = {
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'image/gif': 'gif',
+        'image/jp2': 'jp2'
+      };
+      return map[mime] || 'bin';
+    }
+
+    function toBlobFromObjectUrl(url) {
+      return fetch(url).then(r => r.blob());
+    }
+
+    /**
+     * Convert decoded RGBA/Gray pixel data to PNG using Canvas.
+     * This is the fallback when original encoded bytes are not available.
+     */
+    async function reconstructedPngFromPixels(imgObj) {
+      const { width, height } = imgObj;
+      if (!width || !height) throw new Error('Missing image dimensions');
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.createImageData(width, height);
+
+      // pdf.js image data can come in different shapes.
+      // Best-effort handling: RGBA straight, RGB expanded to RGBA, Gray expanded to RGBA.
+      const data = imgObj.data;
+      if (!data) throw new Error('No pixel data available for reconstruction');
+
+      if (data.length === width * height * 4) {
+        imageData.data.set(data);
+      } else if (data.length === width * height * 3) {
+        for (let i = 0, j = 0; i < data.length; i += 3, j += 4) {
+          imageData.data[j] = data[i];
+          imageData.data[j + 1] = data[i + 1];
+          imageData.data[j + 2] = data[i + 2];
+          imageData.data[j + 3] = 255;
+        }
+      } else if (data.length === width * height) {
+        for (let i = 0, j = 0; i < data.length; i++, j += 4) {
+          const g = data[i];
+          imageData.data[j] = g;
+          imageData.data[j + 1] = g;
+          imageData.data[j + 2] = g;
+          imageData.data[j + 3] = 255;
+        }
+      } else {
+        throw new Error('Unsupported pixel buffer layout for reconstruction');
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Failed to build PNG blob');
+      return blob;
+    }
+
+    async function extractImageFromPdfJsObject(obj) {
+      // Case 1: JPEG image object may be available as HTMLImageElement with a blob/data URL.
+      if (obj instanceof HTMLImageElement && obj.src) {
+        const blob = await toBlobFromObjectUrl(obj.src);
+        const mime = blob.type || 'image/jpeg';
+        return {
+          blob,
+          format: mime,
+          reconstructed: false,
+          width: obj.naturalWidth || undefined,
+          height: obj.naturalHeight || undefined,
+          note: 'Extracted from encoded image object.'
+        };
+      }
+
+      // Case 2: pdf.js image object includes an internal bitmap/transferable image.
+      if (obj && typeof obj === 'object') {
+        if (obj.bitmap && obj.bitmap.width && obj.bitmap.height) {
+          const canvas = document.createElement('canvas');
+          canvas.width = obj.bitmap.width;
+          canvas.height = obj.bitmap.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(obj.bitmap, 0, 0);
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+          return {
+            blob,
+            format: 'image/png',
+            reconstructed: true,
+            width: obj.bitmap.width,
+            height: obj.bitmap.height,
+            note: 'Decoded image reconstructed to PNG (original encoded stream not exposed by pdf.js).'
+          };
+        }
+
+        // Case 3: Decoded raw pixel data from pdf.js (common for non-JPEG streams)
+        if (obj.data && obj.width && obj.height) {
+          const blob = await reconstructedPngFromPixels(obj);
+          return {
+            blob,
+            format: 'image/png',
+            reconstructed: true,
+            width: obj.width,
+            height: obj.height,
+            note: 'Decoded pixel stream reconstructed to PNG (lossless fallback).'
+          };
+        }
+      }
+
+      throw new Error('Unsupported image object shape from pdf.js');
+    }
+
+    async function collectImagesFromPage(page, pageNumber) {
+      const opList = await page.getOperatorList();
+      const fnArray = opList.fnArray;
+      const argsArray = opList.argsArray;
+      const OPS = pdfjsLib.OPS;
+      const refs = [];
+
+      for (let i = 0; i < fnArray.length; i++) {
+        const fn = fnArray[i];
+        if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject || fn === OPS.paintInlineImageXObject) {
+          const args = argsArray[i] || [];
+          const objId = args[0];
+          if (typeof objId === 'string' && objId.length) {
+            refs.push({ objId, page: pageNumber });
+          }
+        }
+      }
+
+      // Remove duplicate references on same page operator stream.
+      const uniq = new Map();
+      for (const r of refs) {
+        uniq.set(`${r.page}|${r.objId}`, r);
+      }
+      return [...uniq.values()];
+    }
+
+    async function extractFromPdf(file) {
+      clearError();
+      resultsGrid.innerHTML = '';
+      extractedImages = [];
+      emptyState.style.display = 'none';
+      downloadAllBtn.disabled = true;
+
+      currentPdfNameBase = sanitizeFileBase(file.name);
+      fileInfo.textContent = `${file.name} (${bytesToSize(file.size)})`;
+
+      let pdf;
+      try {
+        setProgress(4, 'Loading PDF...');
+        const data = new Uint8Array(await file.arrayBuffer());
+        pdf = await pdfjsLib.getDocument({ data, useSystemFonts: true }).promise;
+      } catch (err) {
+        if (err?.name === 'PasswordException') {
+          throw new Error('This PDF is encrypted/password-protected and cannot be processed here.');
+        }
+        throw new Error(`Unable to open PDF. It may be invalid or corrupted. (${err.message || err})`);
+      }
+
+      const objectRefs = [];
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        setProgress(5 + (pageNum / pdf.numPages) * 45, `Scanning page ${pageNum}/${pdf.numPages} operator list...`);
+        const page = await pdf.getPage(pageNum);
+        const refs = await collectImagesFromPage(page, pageNum);
+        objectRefs.push(...refs);
+      }
+
+      if (!objectRefs.length) {
+        setProgress(100, 'Done. No image operators found.');
+        return [];
+      }
+
+      // Group by object ID to deduplicate reused objects across pages.
+      const refsByObj = new Map();
+      for (const ref of objectRefs) {
+        const entry = refsByObj.get(ref.objId) || { objId: ref.objId, pages: new Set() };
+        entry.pages.add(ref.page);
+        refsByObj.set(ref.objId, entry);
+      }
+
+      const uniqueObjIds = [...refsByObj.keys()];
+      const results = [];
+
+      // Retrieve object payload by requesting each page again and waiting for obj resolution.
+      // We try all pages where object appears until one resolves correctly.
+      for (let i = 0; i < uniqueObjIds.length; i++) {
+        const objId = uniqueObjIds[i];
+        const group = refsByObj.get(objId);
+        let extracted = null;
+        let lastError = null;
+
+        setProgress(50 + ((i + 1) / uniqueObjIds.length) * 45, `Extracting image ${i + 1}/${uniqueObjIds.length}...`);
+
+        for (const pageNum of group.pages) {
+          try {
+            const page = await pdf.getPage(pageNum);
+            await page.getOperatorList();
+
+            const obj = await new Promise((resolve, reject) => {
+              let done = false;
+              const timeout = setTimeout(() => {
+                if (!done) reject(new Error('Timed out waiting for image object'));
+              }, 8000);
+
+              page.objs.get(objId, data => {
+                done = true;
+                clearTimeout(timeout);
+                resolve(data);
+              });
+            });
+
+            extracted = await extractImageFromPdfJsObject(obj);
+            break;
+          } catch (err) {
+            lastError = err;
+          }
+        }
+
+        if (!extracted) {
+          // Keep unsupported items visible with a reason.
+          results.push({
+            key: objId,
+            pages: [...group.pages].sort((a, b) => a - b),
+            unsupported: true,
+            error: lastError?.message || 'Unsupported image encoding or inaccessible object stream.'
+          });
+          continue;
+        }
+
+        const arrayBuffer = await extracted.blob.arrayBuffer();
+        const digest = await sha256Hex(arrayBuffer);
+
+        results.push({
+          key: objId,
+          dedupeHash: digest,
+          pages: [...group.pages].sort((a, b) => a - b),
+          blob: extracted.blob,
+          format: extracted.format,
+          reconstructed: extracted.reconstructed,
+          width: extracted.width,
+          height: extracted.height,
+          note: extracted.note,
+          size: extracted.blob.size,
+          previewUrl: URL.createObjectURL(extracted.blob)
+        });
+      }
+
+      // Secondary dedupe by binary content hash in case different object IDs contain identical bytes.
+      const deduped = new Map();
+      for (const item of results) {
+        if (item.unsupported) {
+          deduped.set(`unsupported:${item.key}`, item);
+          continue;
+        }
+        const key = item.dedupeHash;
+        if (!deduped.has(key)) {
+          deduped.set(key, { ...item });
+        } else {
+          const existing = deduped.get(key);
+          const mergedPages = new Set([...existing.pages, ...item.pages]);
+          existing.pages = [...mergedPages].sort((a, b) => a - b);
+        }
+      }
+
+      return [...deduped.values()];
+    }
+
+    function buildFileName(item, index) {
+      const ext = extFromMime(item.format);
+      const firstPage = String(item.pages[0] || 0).padStart(2, '0');
+      const imgNum = String(index + 1).padStart(2, '0');
+      const pagesPart = item.pages.length > 1 ? `pages-${item.pages.join('-')}` : `page-${firstPage}`;
+      return `${currentPdfNameBase}_${pagesPart}_img-${imgNum}.${ext}`;
+    }
+
+    function downloadBlob(blob, fileName) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function renderResults(items) {
+      resultsGrid.innerHTML = '';
+
+      if (!items.length) {
+        emptyState.style.display = 'block';
+        resultsSummary.textContent = 'No extractable embedded raster images found.';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      const supportedCount = items.filter(i => !i.unsupported).length;
+      const reconstructedCount = items.filter(i => i.reconstructed).length;
+      resultsSummary.textContent = `Found ${supportedCount} unique extractable image(s). Reconstructed fallback: ${reconstructedCount}.`;
+
+      items.forEach((item, idx) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const thumb = document.createElement('div');
+        thumb.className = 'thumb';
+
+        if (item.unsupported) {
+          thumb.innerHTML = '<div style="padding:8px;color:#fca5a5;text-align:center;">Unsupported image object</div>';
+        } else {
+          const img = document.createElement('img');
+          img.src = item.previewUrl;
+          img.alt = `Extracted image ${idx + 1}`;
+          thumb.appendChild(img);
+        }
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+
+        if (item.unsupported) {
+          meta.innerHTML = `
+            <div><strong>Image #${idx + 1}</strong></div>
+            <div>Pages: ${item.pages.join(', ') || 'Unknown'}</div>
+            <div style="color:#fca5a5;">${item.error}</div>
+          `;
+        } else {
+          const fileName = buildFileName(item, idx);
+          meta.innerHTML = `
+            <div><strong>Image #${idx + 1}</strong></div>
+            <div>Pages: ${item.pages.join(', ')}</div>
+            <div>Dimensions: ${item.width && item.height ? `${item.width} × ${item.height}px` : 'Unknown'}</div>
+            <div>Format: ${item.format || 'Unknown'} ${item.reconstructed ? '<span class="badge warn">reconstructed</span>' : '<span class="badge">original/encoded</span>'}</div>
+            <div>Size: ${bytesToSize(item.size)}</div>
+            <div style="font-size:0.78rem;">${item.note || ''}</div>
+          `;
+
+          const btn = document.createElement('button');
+          btn.textContent = 'Download';
+          btn.className = 'primary';
+          btn.addEventListener('click', () => downloadBlob(item.blob, fileName));
+          meta.appendChild(btn);
+        }
+
+        card.appendChild(thumb);
+        card.appendChild(meta);
+        resultsGrid.appendChild(card);
+      });
+    }
+
+    async function handleFile(file) {
+      if (!file) return;
+      if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
+        showError('Please select a valid PDF file.');
+        return;
+      }
+
+      try {
+        setProgress(1, 'Preparing...');
+        const items = await extractFromPdf(file);
+        extractedImages = items;
+        renderResults(items);
+
+        const downloadable = items.filter(i => !i.unsupported);
+        downloadAllBtn.disabled = downloadable.length === 0;
+
+        if (!items.length) {
+          showError('No extractable embedded raster images were found in this PDF.');
+        } else if (downloadable.length === 0) {
+          showError('Image objects were detected, but none could be exported due to unsupported encodings.');
+        }
+
+        setProgress(100, 'Finished.');
+      } catch (err) {
+        extractedImages = [];
+        renderResults([]);
+        downloadAllBtn.disabled = true;
+        setProgress(0, 'Failed.');
+        showError(err.message || String(err));
+      }
+    }
+
+    async function downloadAllAsZip() {
+      const items = extractedImages.filter(i => !i.unsupported);
+      if (!items.length) return;
+
+      const zip = new JSZip();
+      const manifest = [];
+
+      items.forEach((item, idx) => {
+        const fileName = buildFileName(item, idx);
+        zip.file(fileName, item.blob);
+        manifest.push({
+          fileName,
+          pages: item.pages,
+          format: item.format,
+          reconstructed: item.reconstructed,
+          width: item.width,
+          height: item.height,
+          sizeBytes: item.size,
+          note: item.note
+        });
+      });
+
+      zip.file('manifest.json', JSON.stringify({
+        sourcePdfBase: currentPdfNameBase,
+        extractedAt: new Date().toISOString(),
+        imageCount: items.length,
+        images: manifest
+      }, null, 2));
+
+      setProgress(100, 'Building ZIP archive...');
+      const blob = await zip.generateAsync({ type: 'blob' }, metadata => {
+        setProgress(metadata.percent, `Zipping... ${metadata.percent.toFixed(0)}%`);
+      });
+
+      downloadBlob(blob, `${currentPdfNameBase}_extracted_images.zip`);
+      setProgress(100, 'ZIP downloaded.');
+    }
+
+    fileInput.addEventListener('change', e => {
+      clearError();
+      const file = e.target.files?.[0];
+      handleFile(file);
+    });
+
+    dropzone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropzone.classList.add('dragging');
+    });
+
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
+
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('dragging');
+      clearError();
+      const file = e.dataTransfer?.files?.[0];
+      handleFile(file);
+    });
+
+    downloadAllBtn.addEventListener('click', () => {
+      downloadAllAsZip().catch(err => showError(`Failed to create ZIP: ${err.message || err}`));
+    });
+  </script>
+</body>
+</html>
