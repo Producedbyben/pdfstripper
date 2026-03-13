@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF Image Extractor</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-soft: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #22c55e;
+      --accent-2: #16a34a;
+      --danger: #ef4444;
+      --border: #334155;
+      --blue: #60a5fa;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(1200px 700px at 20% -20%, #1e293b 0%, var(--bg) 40%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .container { max-width: 1220px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 10px; font-size: clamp(1.4rem, 2.5vw, 2rem); }
+    .subtitle { margin: 0 0 20px; color: var(--muted); line-height: 1.45; }
+
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .tab-btn {
+      border: 1px solid var(--border);
+      background: #0b1220;
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 0.92rem;
+      cursor: pointer;
+    }
+    .tab-btn.active { background: rgba(96, 165, 250, 0.18); border-color: var(--blue); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
+
+    button, .btn {
+      border: 1px solid var(--border);
+      background: var(--panel-soft);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: 0.2s ease;
+      font-size: 0.95rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button:hover, .btn:hover { background: #273549; border-color: #475569; }
+    button.primary { background: var(--accent); border-color: var(--accent-2); color: #052e16; font-weight: 700; }
+    button.primary:hover { background: #4ade80; }
+    button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 28px;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.45);
+      transition: 0.2s ease;
+      margin-bottom: 16px;
+    }
+    .dropzone.dragging { border-color: var(--accent); background: rgba(34, 197, 94, 0.1); }
+    .dropzone p { margin: 0; color: var(--muted); }
+
+    .status { display: grid; gap: 8px; margin-bottom: 14px; }
+    .progress-wrap {
+      height: 12px; width: 100%; background: #0b1220;
+      border: 1px solid var(--border); border-radius: 999px; overflow: hidden;
+    }
+    .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #22c55e, #86efac); transition: width 0.2s ease; }
+
+    .note, .error {
+      border: 1px solid var(--border);
+      border-left: 4px solid #60a5fa;
+      background: rgba(30, 41, 59, 0.7);
+      color: #dbeafe;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
+    }
+    .error { border-left-color: var(--danger); color: #fecaca; }
+
+    .results-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 10px 0 12px; flex-wrap: wrap; }
+    .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 260px;
+    }
+
+    .thumb { height: 170px; background: #0b1220; display: grid; place-items: center; border-bottom: 1px solid var(--border); }
+    .thumb img { max-width: 100%; max-height: 170px; object-fit: contain; }
+
+    .meta { padding: 10px; font-size: 0.85rem; color: var(--muted); display: grid; gap: 4px; }
+    .meta strong { color: var(--text); }
+    .badge {
+      display: inline-block; font-size: 0.72rem; padding: 2px 8px;
+      border-radius: 999px; border: 1px solid var(--border); background: #0b1220; margin-right: 5px;
+    }
+    .badge.warn { border-color: #ca8a04; color: #fef08a; background: rgba(202, 138, 4, 0.15); }
+
+    .list { display: grid; gap: 10px; }
+    .list-item {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .empty {
+      color: var(--muted); text-align: center; border: 1px dashed var(--border);
+      border-radius: 10px; padding: 20px; margin-top: 14px;
+    }
+
+    input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>PDF Image Extractor</h1>
+    <p class="subtitle">Browser-only PDF tools: extract true embedded raster images, or split a PDF into one file per page.</p>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="imagesPanel">Image Extractor</button>
+      <button class="tab-btn" data-tab="splitPanel">Split PDF Pages</button>
+    </div>
+
+    <section id="imagesPanel" class="tab-panel active">
+      <div class="note">
+        <strong>Note:</strong> Vector artwork (paths/text/shapes) is different from embedded raster images. Vector content may not be extractable as standalone image files.
+      </div>
+
+      <div class="toolbar">
+        <label for="fileInput" class="btn">Choose PDF</label>
+        <input id="fileInput" type="file" accept="application/pdf" />
+        <button id="downloadAllBtn" disabled>Download All (ZIP)</button>
+        <span id="fileInfo" style="color:var(--muted);"></span>
+      </div>
+
+      <div id="dropzone" class="dropzone"><p>Drag & drop a PDF file here, or use <strong>Choose PDF</strong>.</p></div>
+
+      <div class="status">
+        <div id="statusText" style="color:var(--muted);">Idle.</div>
+        <div class="progress-wrap"><div id="progressBar" class="progress-bar"></div></div>
+      </div>
+
+      <div id="errorBox" class="error" style="display:none;"></div>
+
+      <div class="results-header"><div id="resultsSummary" style="color:var(--muted);">No results yet.</div></div>
+      <div id="resultsGrid" class="results-grid"></div>
+      <div id="emptyState" class="empty">Upload a PDF to begin extraction.</div>
+    </section>
+
+    <section id="splitPanel" class="tab-panel">
+      <div class="note">
+        <strong>How naming works:</strong> each output file uses the first title-like text line from that page (top-most non-empty text). If no title is found, it falls back to <code>page-XX</code>.
+      </div>
+
+      <div class="toolbar">
+        <label for="splitFileInput" class="btn">Choose PDF</label>
+        <input id="splitFileInput" type="file" accept="application/pdf" />
+        <button id="splitDownloadAllBtn" disabled>Download All Page PDFs (ZIP)</button>
+        <span id="splitFileInfo" style="color:var(--muted);"></span>
+      </div>
+
+      <div id="splitDropzone" class="dropzone"><p>Drag & drop a PDF here to split into single-page PDFs.</p></div>
+
+      <div class="status">
+        <div id="splitStatusText" style="color:var(--muted);">Idle.</div>
+        <div class="progress-wrap"><div id="splitProgressBar" class="progress-bar"></div></div>
+      </div>
+
+      <div id="splitErrorBox" class="error" style="display:none;"></div>
+      <div class="results-header"><div id="splitResultsSummary" style="color:var(--muted);">No pages prepared yet.</div></div>
+      <div id="splitResultsList" class="list"></div>
+      <div id="splitEmptyState" class="empty">Upload a PDF to prepare downloadable one-page PDF files.</div>
+    </section>
+  </div>
+
+  <script type="module">
+    import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs';
+    import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
+    import { PDFDocument } from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';
+
+    const $ = id => document.getElementById(id);
+
+    const fileInput = $('fileInput');
+    const dropzone = $('dropzone');
+    const progressBar = $('progressBar');
+    const statusText = $('statusText');
+    const resultsGrid = $('resultsGrid');
+    const resultsSummary = $('resultsSummary');
+    const emptyState = $('emptyState');
+    const downloadAllBtn = $('downloadAllBtn');
+    const errorBox = $('errorBox');
+    const fileInfo = $('fileInfo');
+
+    const splitFileInput = $('splitFileInput');
+    const splitDropzone = $('splitDropzone');
+    const splitProgressBar = $('splitProgressBar');
+    const splitStatusText = $('splitStatusText');
+    const splitErrorBox = $('splitErrorBox');
+    const splitFileInfo = $('splitFileInfo');
+    const splitResultsSummary = $('splitResultsSummary');
+    const splitResultsList = $('splitResultsList');
+    const splitEmptyState = $('splitEmptyState');
+    const splitDownloadAllBtn = $('splitDownloadAllBtn');
+
+    let extractedImages = [];
+    let splitPages = [];
+    let currentPdfNameBase = 'document';
+    let splitPdfNameBase = 'document';
+
+    function setProgress(value, text) {
+      progressBar.style.width = `${Math.max(0, Math.min(100, value))}%`;
+      statusText.textContent = text;
+    }
+    function setSplitProgress(value, text) {
+      splitProgressBar.style.width = `${Math.max(0, Math.min(100, value))}%`;
+      splitStatusText.textContent = text;
+    }
+    function showError(message) { errorBox.style.display = 'block'; errorBox.textContent = message; }
+    function clearError() { errorBox.style.display = 'none'; errorBox.textContent = ''; }
+    function showSplitError(message) { splitErrorBox.style.display = 'block'; splitErrorBox.textContent = message; }
+    function clearSplitError() { splitErrorBox.style.display = 'none'; splitErrorBox.textContent = ''; }
+
+    function bytesToSize(bytes) {
+      if (!Number.isFinite(bytes)) return 'Unknown';
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 ** 2)).toFixed(2)} MB`;
+    }
+
+    async function sha256Hex(arrayBuffer) {
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      return [...new Uint8Array(hashBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function sanitizeFileBase(name) {
+      return (name || 'document').replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9-_]+/g, '_');
+    }
+    function sanitizeTitlePart(name) {
+      return (name || '').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9-_]+/g, '').slice(0, 80);
+    }
+
+    function extFromMime(mime) {
+      const map = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/jp2': 'jp2' };
+      return map[mime] || 'bin';
+    }
+
+    function toBlobFromObjectUrl(url) { return fetch(url).then(r => r.blob()); }
+
+    async function reconstructedPngFromPixels(imgObj) {
+      const { width, height } = imgObj;
+      if (!width || !height) throw new Error('Missing image dimensions');
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.createImageData(width, height);
+      const data = imgObj.data;
+      if (!data) throw new Error('No pixel data available for reconstruction');
+
+      if (data.length === width * height * 4) {
+        imageData.data.set(data);
+      } else if (data.length === width * height * 3) {
+        for (let i = 0, j = 0; i < data.length; i += 3, j += 4) {
+          imageData.data[j] = data[i];
+          imageData.data[j + 1] = data[i + 1];
+          imageData.data[j + 2] = data[i + 2];
+          imageData.data[j + 3] = 255;
+        }
+      } else if (data.length === width * height) {
+        for (let i = 0, j = 0; i < data.length; i += 1, j += 4) {
+          const g = data[i];
+          imageData.data[j] = g;
+          imageData.data[j + 1] = g;
+          imageData.data[j + 2] = g;
+          imageData.data[j + 3] = 255;
+        }
+      } else {
+        throw new Error('Unsupported pixel buffer layout for reconstruction');
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Failed to build PNG blob');
+      return blob;
+    }
+
+    async function extractImageFromPdfJsObject(obj) {
+      if (obj instanceof HTMLImageElement && obj.src) {
+        const blob = await toBlobFromObjectUrl(obj.src);
+        return {
+          blob,
+          format: blob.type || 'image/jpeg',
+          reconstructed: false,
+          width: obj.naturalWidth || undefined,
+          height: obj.naturalHeight || undefined,
+          note: 'Extracted from encoded image object.'
+        };
+      }
+
+      if (obj && typeof obj === 'object') {
+        if (obj.bitmap?.width && obj.bitmap?.height) {
+          const canvas = document.createElement('canvas');
+          canvas.width = obj.bitmap.width;
+          canvas.height = obj.bitmap.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(obj.bitmap, 0, 0);
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+          return {
+            blob,
+            format: 'image/png',
+            reconstructed: true,
+            width: obj.bitmap.width,
+            height: obj.bitmap.height,
+            note: 'Decoded image reconstructed to PNG (raw encoded stream unavailable via pdf.js).'
+          };
+        }
+
+        if (obj.data && obj.width && obj.height) {
+          const blob = await reconstructedPngFromPixels(obj);
+          return {
+            blob,
+            format: 'image/png',
+            reconstructed: true,
+            width: obj.width,
+            height: obj.height,
+            note: 'Decoded pixel stream reconstructed to PNG (lossless fallback).'
+          };
+        }
+      }
+
+      throw new Error('Unsupported image object shape from pdf.js');
+    }
+
+    async function collectImagesFromPage(page, pageNumber) {
+      const opList = await page.getOperatorList();
+      const refs = [];
+
+      for (let i = 0; i < opList.fnArray.length; i++) {
+        const fn = opList.fnArray[i];
+        if (fn === pdfjsLib.OPS.paintImageXObject || fn === pdfjsLib.OPS.paintJpegXObject || fn === pdfjsLib.OPS.paintInlineImageXObject) {
+          const objId = (opList.argsArray[i] || [])[0];
+          if (typeof objId === 'string' && objId.length) refs.push({ objId, page: pageNumber });
+        }
+      }
+
+      const uniq = new Map();
+      refs.forEach(r => uniq.set(`${r.page}|${r.objId}`, r));
+      return [...uniq.values()];
+    }
+
+    async function extractFromPdf(file) {
+      clearError();
+      resultsGrid.innerHTML = '';
+      extractedImages = [];
+      emptyState.style.display = 'none';
+      downloadAllBtn.disabled = true;
+
+      currentPdfNameBase = sanitizeFileBase(file.name);
+      fileInfo.textContent = `${file.name} (${bytesToSize(file.size)})`;
+
+      let pdf;
+      try {
+        setProgress(4, 'Loading PDF...');
+        pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), useSystemFonts: true }).promise;
+      } catch (err) {
+        if (err?.name === 'PasswordException') throw new Error('This PDF is encrypted/password-protected and cannot be processed here.');
+        throw new Error(`Unable to open PDF. It may be invalid or corrupted. (${err.message || err})`);
+      }
+
+      const objectRefs = [];
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        setProgress(5 + (pageNum / pdf.numPages) * 45, `Scanning page ${pageNum}/${pdf.numPages} operator list...`);
+        const page = await pdf.getPage(pageNum);
+        objectRefs.push(...(await collectImagesFromPage(page, pageNum)));
+      }
+
+      if (!objectRefs.length) {
+        setProgress(100, 'Done. No image operators found.');
+        return [];
+      }
+
+      const refsByObj = new Map();
+      for (const ref of objectRefs) {
+        const entry = refsByObj.get(ref.objId) || { objId: ref.objId, pages: new Set() };
+        entry.pages.add(ref.page);
+        refsByObj.set(ref.objId, entry);
+      }
+
+      const results = [];
+      const uniqueObjIds = [...refsByObj.keys()];
+
+      for (let i = 0; i < uniqueObjIds.length; i++) {
+        const objId = uniqueObjIds[i];
+        const group = refsByObj.get(objId);
+        let extracted = null;
+        let lastError = null;
+
+        setProgress(50 + ((i + 1) / uniqueObjIds.length) * 45, `Extracting image ${i + 1}/${uniqueObjIds.length}...`);
+
+        for (const pageNum of group.pages) {
+          try {
+            const page = await pdf.getPage(pageNum);
+            await page.getOperatorList();
+
+            const obj = await new Promise((resolve, reject) => {
+              let done = false;
+              const timeout = setTimeout(() => !done && reject(new Error('Timed out waiting for image object')), 8000);
+              page.objs.get(objId, data => {
+                done = true;
+                clearTimeout(timeout);
+                resolve(data);
+              });
+            });
+
+            extracted = await extractImageFromPdfJsObject(obj);
+            break;
+          } catch (err) {
+            lastError = err;
+          }
+        }
+
+        if (!extracted) {
+          results.push({ key: objId, pages: [...group.pages].sort((a, b) => a - b), unsupported: true, error: lastError?.message || 'Unsupported image encoding or inaccessible object stream.' });
+          continue;
+        }
+
+        const digest = await sha256Hex(await extracted.blob.arrayBuffer());
+        results.push({
+          key: objId,
+          dedupeHash: digest,
+          pages: [...group.pages].sort((a, b) => a - b),
+          blob: extracted.blob,
+          format: extracted.format,
+          reconstructed: extracted.reconstructed,
+          width: extracted.width,
+          height: extracted.height,
+          note: extracted.note,
+          size: extracted.blob.size,
+          previewUrl: URL.createObjectURL(extracted.blob)
+        });
+      }
+
+      const deduped = new Map();
+      for (const item of results) {
+        if (item.unsupported) {
+          deduped.set(`unsupported:${item.key}`, item);
+        } else if (!deduped.has(item.dedupeHash)) {
+          deduped.set(item.dedupeHash, { ...item });
+        } else {
+          const existing = deduped.get(item.dedupeHash);
+          existing.pages = [...new Set([...existing.pages, ...item.pages])].sort((a, b) => a - b);
+        }
+      }
+
+      return [...deduped.values()];
+    }
+
+    function buildImageFileName(item, index) {
+      const ext = extFromMime(item.format);
+      const imgNum = String(index + 1).padStart(2, '0');
+      const pagesPart = item.pages.length > 1 ? `pages-${item.pages.join('-')}` : `page-${String(item.pages[0] || 0).padStart(2, '0')}`;
+      return `${currentPdfNameBase}_${pagesPart}_img-${imgNum}.${ext}`;
+    }
+
+    function downloadBlob(blob, fileName) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function renderImageResults(items) {
+      resultsGrid.innerHTML = '';
+      if (!items.length) {
+        emptyState.style.display = 'block';
+        resultsSummary.textContent = 'No extractable embedded raster images found.';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      const supportedCount = items.filter(i => !i.unsupported).length;
+      const reconstructedCount = items.filter(i => i.reconstructed).length;
+      resultsSummary.textContent = `Found ${supportedCount} unique extractable image(s). Reconstructed fallback: ${reconstructedCount}.`;
+
+      items.forEach((item, idx) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const thumb = document.createElement('div');
+        thumb.className = 'thumb';
+
+        if (item.unsupported) {
+          thumb.innerHTML = '<div style="padding:8px;color:#fca5a5;text-align:center;">Unsupported image object</div>';
+        } else {
+          const img = document.createElement('img');
+          img.src = item.previewUrl;
+          img.alt = `Extracted image ${idx + 1}`;
+          thumb.appendChild(img);
+        }
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        if (item.unsupported) {
+          meta.innerHTML = `<div><strong>Image #${idx + 1}</strong></div><div>Pages: ${item.pages.join(', ') || 'Unknown'}</div><div style="color:#fca5a5;">${item.error}</div>`;
+        } else {
+          const fileName = buildImageFileName(item, idx);
+          meta.innerHTML = `
+            <div><strong>Image #${idx + 1}</strong></div>
+            <div>Pages: ${item.pages.join(', ')}</div>
+            <div>Dimensions: ${item.width && item.height ? `${item.width} × ${item.height}px` : 'Unknown'}</div>
+            <div>Format: ${item.format || 'Unknown'} ${item.reconstructed ? '<span class="badge warn">reconstructed</span>' : '<span class="badge">original/encoded</span>'}</div>
+            <div>Size: ${bytesToSize(item.size)}</div>
+            <div style="font-size:0.78rem;">${item.note || ''}</div>
+          `;
+          const btn = document.createElement('button');
+          btn.textContent = 'Download';
+          btn.className = 'primary';
+          btn.addEventListener('click', () => downloadBlob(item.blob, fileName));
+          meta.appendChild(btn);
+        }
+
+        card.appendChild(thumb);
+        card.appendChild(meta);
+        resultsGrid.appendChild(card);
+      });
+    }
+
+    async function handleImageFile(file) {
+      if (!file) return;
+      if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) return showError('Please select a valid PDF file.');
+
+      try {
+        setProgress(1, 'Preparing...');
+        const items = await extractFromPdf(file);
+        extractedImages = items;
+        renderImageResults(items);
+
+        const downloadable = items.filter(i => !i.unsupported);
+        downloadAllBtn.disabled = downloadable.length === 0;
+
+        if (!items.length) showError('No extractable embedded raster images were found in this PDF.');
+        else if (!downloadable.length) showError('Image objects were detected, but none could be exported due to unsupported encodings.');
+
+        setProgress(100, 'Finished.');
+      } catch (err) {
+        extractedImages = [];
+        renderImageResults([]);
+        downloadAllBtn.disabled = true;
+        setProgress(0, 'Failed.');
+        showError(err.message || String(err));
+      }
+    }
+
+    async function downloadAllImagesAsZip() {
+      const items = extractedImages.filter(i => !i.unsupported);
+      if (!items.length) return;
+      const zip = new JSZip();
+      const manifest = [];
+
+      items.forEach((item, idx) => {
+        const fileName = buildImageFileName(item, idx);
+        zip.file(fileName, item.blob);
+        manifest.push({ fileName, pages: item.pages, format: item.format, reconstructed: item.reconstructed, width: item.width, height: item.height, sizeBytes: item.size, note: item.note });
+      });
+
+      zip.file('manifest.json', JSON.stringify({ sourcePdfBase: currentPdfNameBase, extractedAt: new Date().toISOString(), imageCount: items.length, images: manifest }, null, 2));
+
+      setProgress(100, 'Building ZIP archive...');
+      const blob = await zip.generateAsync({ type: 'blob' }, metadata => setProgress(metadata.percent, `Zipping... ${metadata.percent.toFixed(0)}%`));
+      downloadBlob(blob, `${currentPdfNameBase}_extracted_images.zip`);
+      setProgress(100, 'ZIP downloaded.');
+    }
+
+    function pickPageTitle(textItems) {
+      const clean = textItems
+        .map(item => ({ text: String(item.str || '').trim(), y: Array.isArray(item.transform) ? item.transform[5] : 0, x: Array.isArray(item.transform) ? item.transform[4] : 0 }))
+        .filter(item => item.text.length > 0);
+
+      if (!clean.length) return '';
+
+      // Heuristic: choose the top-most text row, then left-most within that row.
+      clean.sort((a, b) => (b.y - a.y) || (a.x - b.x));
+      const bestY = clean[0].y;
+      const row = clean.filter(item => Math.abs(item.y - bestY) < 6).sort((a, b) => a.x - b.x);
+      const title = row.map(r => r.text).join(' ').replace(/\s+/g, ' ').trim();
+      return title || clean[0].text;
+    }
+
+    function renderSplitResults(items) {
+      splitResultsList.innerHTML = '';
+      if (!items.length) {
+        splitEmptyState.style.display = 'block';
+        splitResultsSummary.textContent = 'No pages prepared yet.';
+        return;
+      }
+
+      splitEmptyState.style.display = 'none';
+      splitResultsSummary.textContent = `Prepared ${items.length} single-page PDF file(s).`;
+
+      items.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        row.innerHTML = `
+          <div>
+            <div><strong>Page ${item.pageNumber}</strong> → ${item.title || 'Untitled'}</div>
+            <div style="color:var(--muted);font-size:0.85rem;">${item.fileName} • ${bytesToSize(item.size)}</div>
+          </div>
+        `;
+
+        const btn = document.createElement('button');
+        btn.className = 'primary';
+        btn.textContent = 'Download';
+        btn.addEventListener('click', () => downloadBlob(item.blob, item.fileName));
+        row.appendChild(btn);
+
+        splitResultsList.appendChild(row);
+      });
+    }
+
+    async function splitPdfIntoSinglePageFiles(file) {
+      clearSplitError();
+      splitPages = [];
+      splitResultsList.innerHTML = '';
+      splitEmptyState.style.display = 'none';
+      splitDownloadAllBtn.disabled = true;
+
+      splitPdfNameBase = sanitizeFileBase(file.name);
+      splitFileInfo.textContent = `${file.name} (${bytesToSize(file.size)})`;
+
+      // Important: pdf.js may transfer/detach backing buffers when parsing in worker context.
+      // Keep independent byte copies for pdf.js and pdf-lib to avoid detached ArrayBuffer errors.
+      const sourceBytes = new Uint8Array(await file.arrayBuffer());
+      const pdfJsBytes = sourceBytes.slice();
+      const pdfLibBytes = sourceBytes.slice();
+
+      let pdfJsDoc;
+      try {
+        setSplitProgress(4, 'Loading PDF...');
+        pdfJsDoc = await pdfjsLib.getDocument({ data: pdfJsBytes, useSystemFonts: true }).promise;
+      } catch (err) {
+        if (err?.name === 'PasswordException') throw new Error('This PDF is encrypted/password-protected and cannot be split here.');
+        throw new Error(`Unable to open PDF for splitting. (${err.message || err})`);
+      }
+
+      let sourcePdfLib;
+      try {
+        sourcePdfLib = await PDFDocument.load(pdfLibBytes, { ignoreEncryption: false });
+      } catch (err) {
+        throw new Error(`Unable to parse PDF bytes for page export. (${err.message || err})`);
+      }
+
+      const pageOutputs = [];
+
+      for (let pageIndex = 0; pageIndex < pdfJsDoc.numPages; pageIndex++) {
+        const pageNumber = pageIndex + 1;
+        setSplitProgress(8 + ((pageNumber / pdfJsDoc.numPages) * 84), `Preparing page ${pageNumber}/${pdfJsDoc.numPages}...`);
+
+        const page = await pdfJsDoc.getPage(pageNumber);
+        const text = await page.getTextContent();
+        const rawTitle = pickPageTitle(text.items || []);
+        const titlePart = sanitizeTitlePart(rawTitle) || `page-${String(pageNumber).padStart(2, '0')}`;
+
+        const outDoc = await PDFDocument.create();
+        const [copiedPage] = await outDoc.copyPages(sourcePdfLib, [pageIndex]);
+        outDoc.addPage(copiedPage);
+        const outBytes = await outDoc.save();
+        const blob = new Blob([outBytes], { type: 'application/pdf' });
+        const fileName = `${splitPdfNameBase}_${String(pageNumber).padStart(2, '0')}_${titlePart}.pdf`;
+
+        pageOutputs.push({ pageNumber, title: rawTitle || '(fallback title)', fileName, blob, size: blob.size });
+      }
+
+      return pageOutputs;
+    }
+
+    async function handleSplitFile(file) {
+      if (!file) return;
+      if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) return showSplitError('Please select a valid PDF file.');
+
+      try {
+        setSplitProgress(1, 'Preparing...');
+        const pages = await splitPdfIntoSinglePageFiles(file);
+        splitPages = pages;
+        renderSplitResults(pages);
+        splitDownloadAllBtn.disabled = pages.length === 0;
+
+        if (!pages.length) showSplitError('No pages were produced from this PDF.');
+        setSplitProgress(100, 'Finished.');
+      } catch (err) {
+        splitPages = [];
+        renderSplitResults([]);
+        splitDownloadAllBtn.disabled = true;
+        setSplitProgress(0, 'Failed.');
+        showSplitError(err.message || String(err));
+      }
+    }
+
+    async function downloadAllSplitPages() {
+      if (!splitPages.length) return;
+      const zip = new JSZip();
+      splitPages.forEach(page => zip.file(page.fileName, page.blob));
+      zip.file('manifest.json', JSON.stringify({ sourcePdfBase: splitPdfNameBase, generatedAt: new Date().toISOString(), pages: splitPages.map(p => ({ pageNumber: p.pageNumber, title: p.title, fileName: p.fileName, sizeBytes: p.size })) }, null, 2));
+
+      setSplitProgress(100, 'Building ZIP archive...');
+      const blob = await zip.generateAsync({ type: 'blob' }, metadata => setSplitProgress(metadata.percent, `Zipping... ${metadata.percent.toFixed(0)}%`));
+      downloadBlob(blob, `${splitPdfNameBase}_split_pages.zip`);
+      setSplitProgress(100, 'ZIP downloaded.');
+    }
+
+    function initTabs() {
+      const buttons = [...document.querySelectorAll('.tab-btn')];
+      buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          buttons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const tabId = btn.dataset.tab;
+          [...document.querySelectorAll('.tab-panel')].forEach(panel => panel.classList.toggle('active', panel.id === tabId));
+        });
+      });
+    }
+
+    // Image tool events
+    fileInput.addEventListener('change', e => { clearError(); handleImageFile(e.target.files?.[0]); });
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragging'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('dragging');
+      clearError();
+      handleImageFile(e.dataTransfer?.files?.[0]);
+    });
+    downloadAllBtn.addEventListener('click', () => downloadAllImagesAsZip().catch(err => showError(`Failed to create ZIP: ${err.message || err}`)));
+
+    // Split tool events
+    splitFileInput.addEventListener('change', e => { clearSplitError(); handleSplitFile(e.target.files?.[0]); });
+    splitDropzone.addEventListener('dragover', e => { e.preventDefault(); splitDropzone.classList.add('dragging'); });
+    splitDropzone.addEventListener('dragleave', () => splitDropzone.classList.remove('dragging'));
+    splitDropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      splitDropzone.classList.remove('dragging');
+      clearSplitError();
+      handleSplitFile(e.dataTransfer?.files?.[0]);
+    });
+    splitDownloadAllBtn.addEventListener('click', () => downloadAllSplitPages().catch(err => showSplitError(`Failed to create ZIP: ${err.message || err}`)));
+
+    initTabs();
+  </script>
+</body>
+</html>
