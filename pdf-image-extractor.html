@@ -661,11 +661,11 @@
       splitPdfNameBase = sanitizeFileBase(file.name);
       splitFileInfo.textContent = `${file.name} (${bytesToSize(file.size)})`;
 
-      // Important: pdf.js may transfer/detach backing buffers when parsing in worker context.
-      // Keep independent byte copies for pdf.js and pdf-lib to avoid detached ArrayBuffer errors.
-      const sourceBytes = new Uint8Array(await file.arrayBuffer());
-      const pdfJsBytes = sourceBytes.slice();
-      const pdfLibBytes = sourceBytes.slice();
+      // Important: pdf.js may transfer/detach buffers when it hands data to worker parsing.
+      // Use two separate file.arrayBuffer() calls so pdf.js and pdf-lib never share backing memory.
+      const [pdfJsArrayBuffer, pdfLibArrayBuffer] = await Promise.all([file.arrayBuffer(), file.arrayBuffer()]);
+      const pdfJsBytes = new Uint8Array(pdfJsArrayBuffer);
+      const pdfLibBytes = new Uint8Array(pdfLibArrayBuffer);
 
       let pdfJsDoc;
       try {
