@@ -660,12 +660,17 @@
 
       splitPdfNameBase = sanitizeFileBase(file.name);
       splitFileInfo.textContent = `${file.name} (${bytesToSize(file.size)})`;
-      const sourceBytes = await file.arrayBuffer();
+
+      // Important: pdf.js may transfer/detach backing buffers when parsing in worker context.
+      // Keep independent byte copies for pdf.js and pdf-lib to avoid detached ArrayBuffer errors.
+      const sourceBytes = new Uint8Array(await file.arrayBuffer());
+      const pdfJsBytes = sourceBytes.slice();
+      const pdfLibBytes = sourceBytes.slice();
 
       let pdfJsDoc;
       try {
         setSplitProgress(4, 'Loading PDF...');
-        pdfJsDoc = await pdfjsLib.getDocument({ data: new Uint8Array(sourceBytes), useSystemFonts: true }).promise;
+        pdfJsDoc = await pdfjsLib.getDocument({ data: pdfJsBytes, useSystemFonts: true }).promise;
       } catch (err) {
         if (err?.name === 'PasswordException') throw new Error('This PDF is encrypted/password-protected and cannot be split here.');
         throw new Error(`Unable to open PDF for splitting. (${err.message || err})`);
@@ -673,7 +678,7 @@
 
       let sourcePdfLib;
       try {
-        sourcePdfLib = await PDFDocument.load(sourceBytes, { ignoreEncryption: false });
+        sourcePdfLib = await PDFDocument.load(pdfLibBytes, { ignoreEncryption: false });
       } catch (err) {
         throw new Error(`Unable to parse PDF bytes for page export. (${err.message || err})`);
       }
